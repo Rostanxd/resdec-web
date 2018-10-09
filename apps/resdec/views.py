@@ -4,6 +4,8 @@ from django.contrib.auth.models import User
 from django.core.files.storage import default_storage
 from django.http import HttpResponse
 from django.shortcuts import get_object_or_404
+from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_http_methods
 
 from .models import RelationshipType, VariabilityEnvironment, VariabilityEnvironmentData, Algorithm, \
     Interest, InterestItemsNames, HistoryUserItems, UserProfile
@@ -13,8 +15,8 @@ from resdec_algorithms.based_ratings import TransitionComponentsBasedFeatures as
 from resdec_algorithms.based_features import TransitionComponentsBasedFeatures as tcbf
 
 import json
-import pandas as pd
 import numpy as np
+import pandas as pd
 
 
 """General Functions to the frontend or backend"""
@@ -86,7 +88,6 @@ def user_put(request):
     first_name = request.GET.get('first_name', '')
     last_name = request.GET.get('last_name', '')
     email = request.GET.get('email', '')
-    password = request.GET.get('password', '')
 
     # Getting the user form the data base
     user = User.objects.get(username__contains=username)
@@ -94,6 +95,23 @@ def user_put(request):
     user.first_name = first_name
     user.last_name = last_name
     user.email = email
+    user.save()
+
+    data = {
+        'error': 0,
+        'err_msg': ''
+    }
+
+    return HttpResponse(json.dumps(data), content_type='application/json')
+
+
+# Function to update the user password.
+def user_upd_pass(request):
+    username = request.GET.get('username', '')
+    password = request.GET.get('password', '')
+
+    # Getting the user form the data base
+    user = User.objects.get(username__contains=username)
     user.set_password(password)
     user.save()
 
@@ -106,18 +124,23 @@ def user_put(request):
 
 
 # Function to update the user photo
+@csrf_exempt
+@require_http_methods(["POST"])
 def user_photo_upload(request):
-    username = request.GET.get('username', '')
+    username = request.POST.get('username', '')
     photo = request.FILES['photo']
 
     user = User.objects.get(username=username)
     user_profile = UserProfile.objects.filter(user=user)
 
-    save_path = 'user_photos/'
+    save_path = 'user_photos/' + photo.name
     path = default_storage.save(save_path, photo)
+
+    print(path)
 
     if user_profile:
         user_profile[0].avatar = path
+        user_profile[0].save()
     else:
         UserProfile.objects.create(user=user, avatar=path)
 
